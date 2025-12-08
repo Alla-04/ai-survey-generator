@@ -187,7 +187,7 @@ if st.button("Generate"):
                 "Ensure they are not duplicates of the previously generated set."
             )
         else:
-            # If the user typed something more specific like "3 more mcq"
+            # If the user typed something more specific like "give me 3 more mcq"
             # We pass their exact request to the LLM and ensure questions are new
             llm_instruction = (
                 f"Apply the following request to '{topic_for_retrieval}': {user_input}. "
@@ -236,6 +236,7 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
 
 
 
