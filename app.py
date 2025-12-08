@@ -174,10 +174,11 @@ if st.button("Generate"):
         # Continue with the previous topic 
         topic_for_retrieval = st.session_state.LAST_TOPIC
 
-        # Simple continuation keywords should be 3 words or less (eg "more" or "give me more")
+        # Simple continuation keywords should be 3 words or less (eg "more" or "give me more") and should not include a number
         simple_continuation = (
             any(kw in normalized_input for kw in CONTINUATION_KEYWORDS)
             and len(normalized_input.split()) <= 3
+            and not re.search(r"\d", normalized_input)
         )
 
         # If the user types a simple continuation keyword then generate 5 new questions automatically
@@ -236,3 +237,4 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
