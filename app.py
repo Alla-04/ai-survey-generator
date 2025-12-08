@@ -174,13 +174,13 @@ if st.button("Generate"):
         # Continue with the previous topic 
         topic_for_retrieval = st.session_state.LAST_TOPIC
 
-        # Continuation keywords should be 3 words or less (eg "more" or "give me more")
+        # Simple continuation keywords should be 3 words or less (eg "more" or "give me more")
         simple_continuation = (
             any(kw in normalized_input for kw in CONTINUATION_KEYWORDS)
             and len(normalized_input.split()) <= 3
         )
 
-        # If the user types a continuation keyword then generate 5 new questions automatically
+        # If the user types a simple continuation keyword then generate 5 new questions automatically
         if simple_continuation:
             llm_instruction = (
                 f"Generate 5 NEW and DIFFERENT survey questions on the topic '{topic_for_retrieval}'. "
@@ -236,6 +236,7 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
 
 
 
