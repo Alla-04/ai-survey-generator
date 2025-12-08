@@ -147,7 +147,7 @@ if "LAST_TOPIC" not in st.session_state:
     st.session_state.LAST_TOPIC = None
 
 st.title("📝 Survey Question Generator")
-st.write("Generate smart, high-quality survey questions instantly using AI. Enter any topic or format request (MCQ, yes/no, rating, open-ended) and the system will create tailored questions for you.")
+st.write("Generate smart, high-quality survey questions instantly using AI. Enter any topic or format request (MCQ, yes/no, rating, open-ended, Likert, Etc) and the system will create tailored questions for you.")
 user_input = st.text_input("Enter your request:")
 
 if st.button("Generate"):
@@ -231,3 +231,4 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
