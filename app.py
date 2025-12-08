@@ -122,7 +122,7 @@ if load_data() is None:
 # - Output ONLY the list of questions (no explanations)
 system_instruction = (
     "You are an expert survey question generator. Your primary goal is to fulfill the user's request exactly. "
-    "1. Format: You MUST follow all specified numbers and types (MCQ, yes/no, rating scale, open-ended). "
+    "1. Format: You MUST follow all specified numbers and types (MCQ, yes/no, rating scale, open-ended, Likert, Etc). "
     "2. Context: Use the retrieved context for inspiration only. Do not treat it as a restriction. "
     "3. Output: Return ONLY the generated list of questions. Do NOT include any introductory or explanatory text."
 )
@@ -193,6 +193,7 @@ if st.button("Generate"):
             llm_instruction = (
                 f"Apply the following request to '{topic_for_retrieval}': {user_input}. "
                 "Generate only NEW and DIFFERENT questions."
+                "Ensure they are not duplicates of the previously generated set."
             )
 
     # --- Rule 2: User provides a NEW topic ---
@@ -237,4 +238,5 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
 
