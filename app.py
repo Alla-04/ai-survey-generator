@@ -168,15 +168,20 @@ if st.button("Generate"):
         and not re.search(r"about\s+[^,]+", normalized_input)
     )
 
-    # If we already have a topic and user says “more”
+    # If we already have a topic and user says a continuation keyword
     if st.session_state.LAST_TOPIC and is_continuation_command:
 
         # Continue with the previous topic 
         topic_for_retrieval = st.session_state.LAST_TOPIC
 
-        # If the user only typed "more" or "give me more" with no extra details
-        if normalized_input in CONTINUATION_KEYWORDS:
-            # Generate 5 new questions automatically
+        # Continuation keywords should be 3 words or less (eg "more" or "give me more")
+        simple_continuation = (
+            any(kw in normalized_input for kw in CONTINUATION_KEYWORDS)
+            and len(normalized_input.split()) <= 3
+        )
+
+        # If the user types a continuation keyword then generate 5 new questions automatically
+        if simple_continuation:
             llm_instruction = (
                 f"Generate 5 NEW and DIFFERENT survey questions on the topic '{topic_for_retrieval}'. "
                 "Ensure they are not duplicates of the previously generated set."
@@ -231,5 +236,6 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
 
 
