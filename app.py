@@ -236,8 +236,3 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
-
-
-
-
-
