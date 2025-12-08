@@ -175,7 +175,7 @@ if st.button("Generate"):
         topic_for_retrieval = st.session_state.LAST_TOPIC
 
         # If the user only typed "more" or "give me more" with no extra details
-        if normalized_input in ["more", "give more", "give me more"]:
+        if normalized_input in CONTINUATION_KEYWORDS:
             # Generate 5 new questions automatically
             llm_instruction = (
                 f"Generate 5 NEW and DIFFERENT survey questions on the topic '{topic_for_retrieval}'. "
@@ -231,4 +231,5 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
 
