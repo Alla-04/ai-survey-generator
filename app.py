@@ -309,5 +309,5 @@ if st.button("Generate"):
         # Handle cases where the judge output format is invalid
         st.warning("Unable to extract judge score.")
 
-    // Print the judge score reason
+    # Print the judge score reason
     st.text_area("Judge Explanation", judge_output, height=150)
