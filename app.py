@@ -167,6 +167,7 @@ Evaluate the output based on:
 
 Respond ONLY in this format:
 Score: <0-100>
+Reason: <very brief explanation>
 """)
 
 
@@ -307,3 +308,6 @@ if st.button("Generate"):
     else:
         # Handle cases where the judge output format is invalid
         st.warning("Unable to extract judge score.")
+
+    // Print the judge score reason
+    st.text_area("Judge Explanation", judge_output, height=150)
