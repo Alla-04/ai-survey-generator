@@ -7,6 +7,8 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI   # LangChain for LLM 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import CharacterTextSplitter
 from pypdf import PdfReader                                 # PyPDF to read the dataset file
+import os                                                   # Environment variables for LangSmith setup
+from langsmith import Client                                # Client for LLM tracing and evaluation
 
 
 # --- 2. SECRETS & INITIALIZATION ---
@@ -17,9 +19,18 @@ ASTRA_DB_KEYSPACE = st.secrets["ASTRA_DB_KEYSPACE"]                     # Used t
 ASTRA_COLLECTION = st.secrets["ASTRA_COLLECTION"]                       # Used to define which table holds the embeddings
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]                           # Used to access OpenAI for embeddings and LLM generation
 
-# LLM and embedding model
+# LangSmith configuration
+os.environ["LANGCHAIN_TRACING_V2"] = "true"                        # Enables LangSmith tracing for all LangChain LLM calls
+os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGSMITH_API_KEY"]  # Authenticates the application with LangSmith
+os.environ["LANGCHAIN_PROJECT"] = "AI-Survey-Generator"            # Groups all traces under a named LangSmith project
+
+langsmith_client = Client()                                        # Initializes the LangSmith client for logging and evaluation
+
+
+# LLM, embedding model, and LangSmith 
 llm = ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-4o-mini")
 embedding = OpenAIEmbeddings(api_key=OPENAI_API_KEY, model="text-embedding-3-small")
+judge_llm = ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-4o-mini")
 
 
 # --- 3. ASTRA REST API HELPERS ---
@@ -121,8 +132,8 @@ if load_data() is None:
 # - Use retrieved context only as inspiration
 # - Output ONLY the list of questions (no explanations)
 system_instruction = (
-    "You are an expert survey question generator. Your primary goal is to fulfill the user's request exactly. "
-    "1. Format: You MUST follow all specified numbers and types (MCQ, yes/no, rating scale, open-ended, Likert, Etc). "
+    "You are an expert survey question generator. Your primary goal is to fulfill the user's request exactly."
+    "1. Format: You MUST follow all specified numbers and types (MCQ, yes/no, rating scale, open-ended, Likert, Etc)."
     "2. Context: Use the retrieved context for inspiration only. Do not treat it as a restriction. "
     "3. Output: Return ONLY the generated list of questions. Do NOT include any introductory or explanatory text."
 )
@@ -135,6 +146,28 @@ prompt_template = ChatPromptTemplate.from_messages([
     ("system", system_instruction),
     ("human", "Context:\n{context}\n\nUser Request: {instruction}")
 ])
+
+
+# --- 5.5 LLM-AS-JUDGE PROMPT ---
+
+# Prompt used by the LLM-as-a-judge to evaluate relevance, instruction compliance, and cleanliness of the generated survey questions
+judge_prompt = ChatPromptTemplate.from_template("""
+You are an evaluation assistant.
+
+User Request:
+{user_input}
+
+Generated Survey Questions:
+{output}
+
+Evaluate the output based on:
+1. Topic relevance
+2. Compliance with specific instructions (number, format, type)
+3. Output cleanliness (no extra text, no duplicates)
+
+Respond ONLY in this format:
+Score: <0-100>
+""")
 
 
 # --- 6. UI + SMART COMMAND HANDLING ---
@@ -238,3 +271,39 @@ if st.button("Generate"):
 
     st.subheader("Generated Questions")
     st.write(result)
+
+
+    # --- 7. LANGSMITH LLM-AS-JUDGE EVALUATION ---
+
+    # Send the generated output to the judge LLM while showing a loading spinner
+    with st.spinner("Evaluating AI output..."):
+        judge_response = judge_llm.invoke(
+            judge_prompt.format(
+                user_input=user_input, # Original user request
+                output=result          # AI-generated survey questions
+            )
+        )
+
+    # Extract the text response from the judge LLM
+    judge_output = judge_response.content
+
+    # Extract the numeric score (0–100) from the judge response
+    score_match = re.search(r"Score:\s*(\d+)", judge_output)
+    judge_score = int(score_match.group(1)) if score_match else None
+
+    # Display evaluation results in the UI
+    st.subheader("Evaluation (LLM-as-a-Judge)")
+
+    if judge_score is not None:
+        st.metric("Judge Score", f"{judge_score}%")
+
+        # Interpret the score using predefined thresholds
+        if judge_score >= 85:
+            st.success("Output strongly satisfies the user request.")
+        elif judge_score >= 60:
+            st.warning("Output partially satisfies the user request.")
+        else:
+            st.error("Output does not satisfy key requirements.")
+    else:
+        # Handle cases where the judge output format is invalid
+        st.warning("Unable to extract judge score.")
