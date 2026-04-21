@@ -35,56 +35,118 @@ judge_llm = ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-4o-mini")
 
 # --- 3. ASTRA REST API HELPERS ---
 
-# Inserts a text chunk + embedding into Astra
+# Inserts a text chunk + its embedding into AstraDB
 def astra_insert_chunk(idx, text):
-    # URL of the Astra REST API endpoint
+    # Build Astra endpoint URL (collection level)
     url = f"{ASTRA_DB_ENDPOINT}/api/json/v1/{ASTRA_DB_KEYSPACE}/{ASTRA_COLLECTION}"
 
-    # Headers contain authentication + content type
+    # Headers for authentication + JSON request
     headers = {
         "x-cassandra-token": ASTRA_DB_APPLICATION_TOKEN,
         "Content-Type": "application/json"
     }
 
-    # Payload includes: unique ID, chunk text, and its embedding vector
+    # Payload structure for inserting a document
+    # Each chunk gets:
+    # - unique ID
+    # - raw text
+    # - vector embedding (used later for similarity search)
     payload = {
-        "documentId": f"chunk_{idx}",
-        "document": {
-            "text": text,
-            "embedding": embedding.embed_query(text)
+        "insertOne": {
+            "document": {
+                "_id": f"chunk_{idx}",
+                "text": text,
+                "$vector": embedding.embed_query(text)
+            }
         }
     }
 
-    # Send POST request to Astra (store the document)
-    requests.post(url, headers=headers, json=payload)
+    try:
+        # Send insert request to Astra
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+
+        # If insert fails, show warning + response details
+        if response.status_code not in [200, 201]:
+            st.warning(f"Insert failed for chunk_{idx}: {response.status_code}")
+            st.code(response.text)
+
+    except requests.RequestException as e:
+        # Handle network/API errors
+        st.warning(f"Insert request failed for chunk_{idx}: {e}")
 
 
-# Searches for similar embeddings (vector search)
+# Searches AstraDB for most similar chunks using vector search
 def astra_query(top_k, query_text):
-    # URL for vector search
-    url = f"{ASTRA_DB_ENDPOINT}/api/json/v1/{ASTRA_DB_KEYSPACE}/{ASTRA_COLLECTION}/vector-search"
+    # Same endpoint (query happens on collection)
+    url = f"{ASTRA_DB_ENDPOINT}/api/json/v1/{ASTRA_DB_KEYSPACE}/{ASTRA_COLLECTION}"
 
     headers = {
         "x-cassandra-token": ASTRA_DB_APPLICATION_TOKEN,
         "Content-Type": "application/json"
     }
 
-    # Generate embedding for the query text
+    # Convert user query into embedding vector
+    query_vector = embedding.embed_query(query_text)
+
+    # Payload:
+    # - no filter (search everything)
+    # - sort by similarity using 'vector' column
+    # - limit results to top_k
     payload = {
-        "vector": embedding.embed_query(query_text),
-        "topK": top_k
+        "find": {
+            "filter": {},
+            "sort": {
+                "vector": query_vector
+            },
+            "options": {
+                "limit": top_k
+            }
+        }
     }
 
-    # Make the request and parse JSON response
-    res = requests.post(url, headers=headers, json=payload).json()
+    try:
+        # Send search request to Astra
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
 
-    # Handle case where no documents exist yet
-    if "documents" not in res:
+        # If API returns error (e.g., wrong schema / endpoint)
+        if response.status_code != 200:
+            st.error(f"Astra query failed: {response.status_code}")
+            st.code(response.text)
+            return ""
+
+        # Handle empty response case
+        if not response.text.strip():
+            st.error("Astra returned an empty response.")
+            return ""
+
+        # Try parsing JSON safely
+        try:
+            res = response.json()
+        except ValueError:
+            st.error("Astra returned non-JSON content.")
+            st.code(response.text)
+            return ""
+
+        # Extract documents list
+        documents = res.get("data", {}).get("documents", [])
+
+        # If nothing found, show debug info
+        if not documents:
+            st.warning("No documents found in Astra response.")
+            st.json(res)
+            return ""
+
+        # Return only text content (used later in RAG prompt)
+        return "\n".join(
+            doc.get("text", "")
+            for doc in documents
+            if doc.get("text")
+        )
+
+    except requests.RequestException as e:
+        # Handle connection errors
+        st.error(f"Request to Astra failed: {e}")
         return ""
-
-    # Return only the text fields of the retrieved chunks
-    return "\n".join([doc["data"]["text"] for doc in res["documents"]])
-
 
 # --- 4. PDF INGESTION ---
 
@@ -258,7 +320,7 @@ if st.button("Generate"):
             )
     
     # RAG query Astra for context
-    context = astra_query(3, topic_for_retrieval)
+    context = astra_query(3, topic_for_retrieval) or ""
 
     # Show spinner while generating
     with st.spinner("Generating your survey questions..."):
@@ -309,5 +371,4 @@ if st.button("Generate"):
         # Handle cases where the judge output format is invalid
         st.warning("Unable to extract judge score.")
 
-    # Print the judge score reason
     st.text_area("Judge Explanation", judge_output, height=150)
